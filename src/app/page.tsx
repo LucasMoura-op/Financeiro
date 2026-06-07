@@ -64,6 +64,7 @@ type SyncStatus = "local" | "loading" | "saving" | "synced" | "error";
 const storageKey = "aureon:business-scenarios";
 const legacyStorageKey = "negociosx:scenarios";
 const workspaceStorageKey = "aureon:workspace-key";
+const workspaceAccessStorageKey = "aureon:workspace-access-key";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const cloudSyncEnabled = Boolean(supabaseUrl && supabaseAnonKey);
@@ -384,6 +385,14 @@ function getStoredWorkspaceKey() {
   return normalizeWorkspaceKey(localStorage.getItem(workspaceStorageKey) ?? "aureon") || "aureon";
 }
 
+function getStoredWorkspaceAccessKey() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return localStorage.getItem(workspaceAccessStorageKey) ?? "";
+}
+
 function readStoredScenarios() {
   if (typeof window === "undefined") {
     return seedScenarios;
@@ -404,29 +413,29 @@ function saveScenarios(nextScenarios: Scenario[]) {
   }
 }
 
-async function fetchCloudScenarios(workspaceKey: string) {
+async function fetchCloudScenarios(workspaceKey: string, accessKey: string) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return null;
   }
 
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/aureon_workspaces?workspace_key=eq.${encodeURIComponent(
-      workspaceKey,
-    )}&select=payload`,
-    {
-      headers: {
-        apikey: supabaseAnonKey,
-        authorization: `Bearer ${supabaseAnonKey}`,
-      },
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/aureon_get_workspace`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      authorization: `Bearer ${supabaseAnonKey}`,
+      "content-type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      p_access_key: accessKey,
+      p_workspace_key: workspaceKey,
+    }),
+  });
 
   if (!response.ok) {
     throw new Error("Nao foi possivel carregar os dados do Supabase.");
   }
 
-  const rows = (await response.json()) as Array<{ payload: unknown }>;
-  const payload = rows[0]?.payload;
+  const payload = (await response.json()) as unknown;
 
   if (!payload) {
     return null;
@@ -435,28 +444,28 @@ async function fetchCloudScenarios(workspaceKey: string) {
   return parseScenariosSnapshot(JSON.stringify(payload));
 }
 
-async function saveCloudScenarios(workspaceKey: string, nextScenarios: Scenario[]) {
+async function saveCloudScenarios(
+  workspaceKey: string,
+  accessKey: string,
+  nextScenarios: Scenario[],
+) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return;
   }
 
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/aureon_workspaces?on_conflict=workspace_key`,
-    {
-      method: "POST",
-      headers: {
-        apikey: supabaseAnonKey,
-        authorization: `Bearer ${supabaseAnonKey}`,
-        "content-type": "application/json",
-        prefer: "resolution=merge-duplicates",
-      },
-      body: JSON.stringify({
-        workspace_key: workspaceKey,
-        payload: nextScenarios,
-        updated_at: new Date().toISOString(),
-      }),
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/aureon_save_workspace`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      authorization: `Bearer ${supabaseAnonKey}`,
+      "content-type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      p_access_key: accessKey,
+      p_payload: nextScenarios,
+      p_workspace_key: workspaceKey,
+    }),
+  });
 
   if (!response.ok) {
     throw new Error("Nao foi possivel salvar os dados no Supabase.");
@@ -469,6 +478,8 @@ export default function Home() {
   const [cloudReady, setCloudReady] = useState(false);
   const [workspaceKey, setWorkspaceKey] = useState("aureon");
   const [workspaceInput, setWorkspaceInput] = useState("aureon");
+  const [workspaceAccessKey, setWorkspaceAccessKey] = useState("");
+  const [workspaceAccessInput, setWorkspaceAccessInput] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
   const [syncMessage, setSyncMessage] = useState("Dados salvos apenas neste navegador.");
   const [form, setForm] = useState<ScenarioForm>(initialForm);
@@ -476,8 +487,9 @@ export default function Home() {
   const [selectedType, setSelectedType] = useState<"all" | BusinessType>("all");
 
   const loadCloudWorkspace = useCallback(
-    async (nextWorkspaceKey: string, fallbackScenarios: Scenario[]) => {
+    async (nextWorkspaceKey: string, nextAccessKey: string, fallbackScenarios: Scenario[]) => {
       const normalizedKey = normalizeWorkspaceKey(nextWorkspaceKey);
+      const normalizedAccessKey = nextAccessKey.trim();
 
       if (!normalizedKey) {
         setSyncStatus("error");
@@ -485,12 +497,21 @@ export default function Home() {
         return;
       }
 
+      if (normalizedAccessKey.length < 6) {
+        setSyncStatus("error");
+        setSyncMessage("Informe uma chave de acesso com pelo menos 6 caracteres.");
+        return;
+      }
+
       setWorkspaceKey(normalizedKey);
       setWorkspaceInput(normalizedKey);
+      setWorkspaceAccessKey(normalizedAccessKey);
+      setWorkspaceAccessInput(normalizedAccessKey);
       setCloudReady(false);
 
       if (typeof window !== "undefined") {
         localStorage.setItem(workspaceStorageKey, normalizedKey);
+        localStorage.setItem(workspaceAccessStorageKey, normalizedAccessKey);
       }
 
       if (!cloudSyncEnabled) {
@@ -503,14 +524,14 @@ export default function Home() {
       setSyncMessage("Carregando dados da nuvem...");
 
       try {
-        const cloudScenarios = await fetchCloudScenarios(normalizedKey);
+        const cloudScenarios = await fetchCloudScenarios(normalizedKey, normalizedAccessKey);
 
         if (cloudScenarios) {
           setScenarioState(cloudScenarios);
           setSyncStatus("synced");
           setSyncMessage(`Sincronizado na nuvem: ${normalizedKey}`);
         } else {
-          await saveCloudScenarios(normalizedKey, fallbackScenarios);
+          await saveCloudScenarios(normalizedKey, normalizedAccessKey, fallbackScenarios);
           setScenarioState(fallbackScenarios);
           setSyncStatus("synced");
           setSyncMessage(`Novo grupo criado na nuvem: ${normalizedKey}`);
@@ -519,7 +540,7 @@ export default function Home() {
         setCloudReady(true);
       } catch {
         setSyncStatus("error");
-        setSyncMessage("Nao foi possivel conectar ao Supabase. Verifique URL, anon key e tabela.");
+        setSyncMessage("Nao foi possivel acessar a nuvem. Verifique a chave do grupo e o SQL do Supabase.");
       }
     },
     [],
@@ -528,15 +549,21 @@ export default function Home() {
   useEffect(() => {
     queueMicrotask(() => {
       const storedWorkspaceKey = getStoredWorkspaceKey();
+      const storedWorkspaceAccessKey = getStoredWorkspaceAccessKey();
       const localScenarios = readStoredScenarios();
 
       setWorkspaceKey(storedWorkspaceKey);
       setWorkspaceInput(storedWorkspaceKey);
+      setWorkspaceAccessKey(storedWorkspaceAccessKey);
+      setWorkspaceAccessInput(storedWorkspaceAccessKey);
       setScenarioState(localScenarios);
       setStorageReady(true);
 
-      if (cloudSyncEnabled) {
-        void loadCloudWorkspace(storedWorkspaceKey, localScenarios);
+      if (cloudSyncEnabled && storedWorkspaceAccessKey) {
+        void loadCloudWorkspace(storedWorkspaceKey, storedWorkspaceAccessKey, localScenarios);
+      } else if (cloudSyncEnabled) {
+        setSyncStatus("local");
+        setSyncMessage("Informe a chave de acesso para sincronizar este grupo na nuvem.");
       }
     });
   }, [loadCloudWorkspace]);
@@ -548,7 +575,7 @@ export default function Home() {
   }, [scenarios, storageReady]);
 
   useEffect(() => {
-    if (!storageReady || !cloudReady || !cloudSyncEnabled) {
+    if (!storageReady || !cloudReady || !cloudSyncEnabled || !workspaceAccessKey) {
       return;
     }
 
@@ -556,19 +583,19 @@ export default function Home() {
       setSyncStatus("saving");
       setSyncMessage("Salvando na nuvem...");
 
-      void saveCloudScenarios(workspaceKey, scenarios)
+      void saveCloudScenarios(workspaceKey, workspaceAccessKey, scenarios)
         .then(() => {
           setSyncStatus("synced");
           setSyncMessage(`Sincronizado na nuvem: ${workspaceKey}`);
         })
         .catch(() => {
           setSyncStatus("error");
-          setSyncMessage("Nao foi possivel salvar na nuvem. Verifique Supabase e RLS.");
+          setSyncMessage("Nao foi possivel salvar na nuvem. Verifique a chave de acesso.");
         });
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [cloudReady, scenarios, storageReady, workspaceKey]);
+  }, [cloudReady, scenarios, storageReady, workspaceAccessKey, workspaceKey]);
 
   function setScenarios(updater: Scenario[] | ((currentScenarios: Scenario[]) => Scenario[])) {
     setScenarioState((currentScenarios) => {
@@ -581,7 +608,7 @@ export default function Home() {
 
   function handleWorkspaceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadCloudWorkspace(workspaceInput, scenarios);
+    void loadCloudWorkspace(workspaceInput, workspaceAccessInput, scenarios);
   }
 
   const previewScenario = useMemo(() => {
@@ -805,13 +832,13 @@ export default function Home() {
               Sincronizacao entre dispositivos
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Use o mesmo codigo do grupo no computador, celular ou tablet para acessar os
-              mesmos estudos. Sem Supabase configurado, o app continua salvando apenas neste
-              navegador.
+              Use o mesmo codigo do grupo e a mesma chave de acesso no computador, celular ou
+              tablet para acessar os mesmos estudos. Sem Supabase configurado, o app continua
+              salvando apenas neste navegador.
             </p>
           </div>
 
-          <form className="grid gap-3 sm:grid-cols-[220px_auto]" onSubmit={handleWorkspaceSubmit}>
+          <form className="grid gap-3 md:grid-cols-[180px_220px_auto]" onSubmit={handleWorkspaceSubmit}>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Codigo do grupo
               <input
@@ -819,6 +846,17 @@ export default function Home() {
                 onChange={(event) => setWorkspaceInput(event.target.value)}
                 placeholder="aureon"
                 value={workspaceInput}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Chave de acesso
+              <input
+                className="h-11 rounded-md border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+                minLength={6}
+                onChange={(event) => setWorkspaceAccessInput(event.target.value)}
+                placeholder="minimo 6 caracteres"
+                type="password"
+                value={workspaceAccessInput}
               />
             </label>
             <button

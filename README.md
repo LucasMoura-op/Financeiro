@@ -69,7 +69,9 @@ Importante: `SUPABASE_SERVICE_ROLE_KEY` nunca deve ser usada em componentes clie
 
 Execute o SQL em `supabase/migrations/001_aureon_workspaces.sql` no SQL Editor do Supabase.
 
-No app, use o mesmo `Codigo do grupo` em qualquer dispositivo para carregar e salvar o mesmo conjunto de estudos.
+No app, use o mesmo `Codigo do grupo` e a mesma `Chave de acesso` em qualquer dispositivo para carregar e salvar o mesmo conjunto de estudos.
+
+A tabela nao possui policy anon de `insert` ou `update` com `true`. Escritas passam por funcoes RPC `security definer`, que validam a chave de acesso do grupo antes de criar, ler ou atualizar os dados.
 
 Tabelas recomendadas para a proxima etapa:
 
