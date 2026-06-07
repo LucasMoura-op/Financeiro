@@ -10,6 +10,7 @@ Painel do Grupo Aureon, de Lucas Moura, para analisar oportunidades em studios p
 - Considera preco de compra, taxas de aquisicao, reforma/setup, capital de giro, custos fixos, parcelas, impostos/comissoes e valorizacao esperada.
 - Permite editar, duplicar, filtrar e remover cenarios.
 - Salva os dados no navegador para uso imediato no prototipo.
+- Sincroniza estudos entre dispositivos quando Supabase esta configurado.
 - Funciona sem backend, sem credenciais e sem dependencia externa.
 
 ## Stack
@@ -52,9 +53,11 @@ Use as configuracoes padrao da Vercel para Next.js:
 
 O projeto nao usa `output: "export"`, `basePath` ou `assetPrefix`, porque isso e desnecessario na Vercel e pode quebrar assets/rotas quando o app evoluir.
 
-## Supabase
+## Supabase e sincronizacao
 
-O prototipo atual nao depende de Supabase. Quando a plataforma precisar de usuarios, times e dados sincronizados, crie as variaveis abaixo na Vercel e no `.env.local`:
+O app funciona localmente sem Supabase, mas para acessar os mesmos estudos em qualquer dispositivo e necessario configurar Supabase.
+
+Crie as variaveis abaixo na Vercel e no `.env.local`:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
@@ -64,8 +67,13 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Importante: `SUPABASE_SERVICE_ROLE_KEY` nunca deve ser usada em componentes client-side. Ela deve ficar apenas em rotas server-side, actions ou jobs protegidos.
 
+Execute o SQL em `supabase/migrations/001_aureon_workspaces.sql` no SQL Editor do Supabase.
+
+No app, use o mesmo `Codigo do grupo` em qualquer dispositivo para carregar e salvar o mesmo conjunto de estudos.
+
 Tabelas recomendadas para a proxima etapa:
 
+- `aureon_workspaces`
 - `profiles`
 - `organizations`
 - `organization_members`

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type BusinessType = "airbnb" | "events" | "auction";
 
@@ -59,8 +59,14 @@ type ScenarioMetrics = {
   risk: "Baixo" | "Moderado" | "Alto";
 };
 
+type SyncStatus = "local" | "loading" | "saving" | "synced" | "error";
+
 const storageKey = "aureon:business-scenarios";
 const legacyStorageKey = "negociosx:scenarios";
+const workspaceStorageKey = "aureon:workspace-key";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const cloudSyncEnabled = Boolean(supabaseUrl && supabaseAnonKey);
 
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -360,6 +366,24 @@ function parseScenariosSnapshot(snapshot: string | null) {
   }
 }
 
+function normalizeWorkspaceKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+}
+
+function getStoredWorkspaceKey() {
+  if (typeof window === "undefined") {
+    return "aureon";
+  }
+
+  return normalizeWorkspaceKey(localStorage.getItem(workspaceStorageKey) ?? "aureon") || "aureon";
+}
+
 function readStoredScenarios() {
   if (typeof window === "undefined") {
     return seedScenarios;
@@ -380,25 +404,171 @@ function saveScenarios(nextScenarios: Scenario[]) {
   }
 }
 
+async function fetchCloudScenarios(workspaceKey: string) {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/aureon_workspaces?workspace_key=eq.${encodeURIComponent(
+      workspaceKey,
+    )}&select=payload`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        authorization: `Bearer ${supabaseAnonKey}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Nao foi possivel carregar os dados do Supabase.");
+  }
+
+  const rows = (await response.json()) as Array<{ payload: unknown }>;
+  const payload = rows[0]?.payload;
+
+  if (!payload) {
+    return null;
+  }
+
+  return parseScenariosSnapshot(JSON.stringify(payload));
+}
+
+async function saveCloudScenarios(workspaceKey: string, nextScenarios: Scenario[]) {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return;
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/aureon_workspaces?on_conflict=workspace_key`,
+    {
+      method: "POST",
+      headers: {
+        apikey: supabaseAnonKey,
+        authorization: `Bearer ${supabaseAnonKey}`,
+        "content-type": "application/json",
+        prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({
+        workspace_key: workspaceKey,
+        payload: nextScenarios,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Nao foi possivel salvar os dados no Supabase.");
+  }
+}
+
 export default function Home() {
   const [scenarios, setScenarioState] = useState<Scenario[]>(seedScenarios);
   const [storageReady, setStorageReady] = useState(false);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [workspaceKey, setWorkspaceKey] = useState("aureon");
+  const [workspaceInput, setWorkspaceInput] = useState("aureon");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
+  const [syncMessage, setSyncMessage] = useState("Dados salvos apenas neste navegador.");
   const [form, setForm] = useState<ScenarioForm>(initialForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"all" | BusinessType>("all");
 
+  const loadCloudWorkspace = useCallback(
+    async (nextWorkspaceKey: string, fallbackScenarios: Scenario[]) => {
+      const normalizedKey = normalizeWorkspaceKey(nextWorkspaceKey);
+
+      if (!normalizedKey) {
+        setSyncStatus("error");
+        setSyncMessage("Informe um codigo de grupo valido.");
+        return;
+      }
+
+      setWorkspaceKey(normalizedKey);
+      setWorkspaceInput(normalizedKey);
+      setCloudReady(false);
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(workspaceStorageKey, normalizedKey);
+      }
+
+      if (!cloudSyncEnabled) {
+        setSyncStatus("local");
+        setSyncMessage("Supabase ainda nao configurado. Os dados estao somente neste navegador.");
+        return;
+      }
+
+      setSyncStatus("loading");
+      setSyncMessage("Carregando dados da nuvem...");
+
+      try {
+        const cloudScenarios = await fetchCloudScenarios(normalizedKey);
+
+        if (cloudScenarios) {
+          setScenarioState(cloudScenarios);
+          setSyncStatus("synced");
+          setSyncMessage(`Sincronizado na nuvem: ${normalizedKey}`);
+        } else {
+          await saveCloudScenarios(normalizedKey, fallbackScenarios);
+          setScenarioState(fallbackScenarios);
+          setSyncStatus("synced");
+          setSyncMessage(`Novo grupo criado na nuvem: ${normalizedKey}`);
+        }
+
+        setCloudReady(true);
+      } catch {
+        setSyncStatus("error");
+        setSyncMessage("Nao foi possivel conectar ao Supabase. Verifique URL, anon key e tabela.");
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     queueMicrotask(() => {
-      setScenarioState(readStoredScenarios());
+      const storedWorkspaceKey = getStoredWorkspaceKey();
+      const localScenarios = readStoredScenarios();
+
+      setWorkspaceKey(storedWorkspaceKey);
+      setWorkspaceInput(storedWorkspaceKey);
+      setScenarioState(localScenarios);
       setStorageReady(true);
+
+      if (cloudSyncEnabled) {
+        void loadCloudWorkspace(storedWorkspaceKey, localScenarios);
+      }
     });
-  }, []);
+  }, [loadCloudWorkspace]);
 
   useEffect(() => {
     if (storageReady) {
       saveScenarios(scenarios);
     }
   }, [scenarios, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady || !cloudReady || !cloudSyncEnabled) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setSyncStatus("saving");
+      setSyncMessage("Salvando na nuvem...");
+
+      void saveCloudScenarios(workspaceKey, scenarios)
+        .then(() => {
+          setSyncStatus("synced");
+          setSyncMessage(`Sincronizado na nuvem: ${workspaceKey}`);
+        })
+        .catch(() => {
+          setSyncStatus("error");
+          setSyncMessage("Nao foi possivel salvar na nuvem. Verifique Supabase e RLS.");
+        });
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [cloudReady, scenarios, storageReady, workspaceKey]);
 
   function setScenarios(updater: Scenario[] | ((currentScenarios: Scenario[]) => Scenario[])) {
     setScenarioState((currentScenarios) => {
@@ -407,6 +577,11 @@ export default function Home() {
 
       return nextScenarios;
     });
+  }
+
+  function handleWorkspaceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadCloudWorkspace(workspaceInput, scenarios);
   }
 
   const previewScenario = useMemo(() => {
@@ -622,6 +797,47 @@ export default function Home() {
             )}
           </section>
         </header>
+
+        <section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-cyan-700">Nuvem Aureon</p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-950">
+              Sincronizacao entre dispositivos
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Use o mesmo codigo do grupo no computador, celular ou tablet para acessar os
+              mesmos estudos. Sem Supabase configurado, o app continua salvando apenas neste
+              navegador.
+            </p>
+          </div>
+
+          <form className="grid gap-3 sm:grid-cols-[220px_auto]" onSubmit={handleWorkspaceSubmit}>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Codigo do grupo
+              <input
+                className="h-11 rounded-md border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+                onChange={(event) => setWorkspaceInput(event.target.value)}
+                placeholder="aureon"
+                value={workspaceInput}
+              />
+            </label>
+            <button
+              className="h-11 self-end rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              disabled={syncStatus === "loading" || syncStatus === "saving"}
+              type="submit"
+            >
+              Conectar
+            </button>
+          </form>
+
+          <div className="lg:col-span-2">
+            <SyncNotice
+              configured={cloudSyncEnabled}
+              message={syncMessage}
+              status={syncStatus}
+            />
+          </div>
+        </section>
 
         <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
           <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -1032,6 +1248,35 @@ function TextInput({
         value={value}
       />
     </label>
+  );
+}
+
+function SyncNotice({
+  configured,
+  message,
+  status,
+}: {
+  configured: boolean;
+  message: string;
+  status: SyncStatus;
+}) {
+  const toneClass = {
+    local: "border-amber-200 bg-amber-50 text-amber-900",
+    loading: "border-cyan-200 bg-cyan-50 text-cyan-900",
+    saving: "border-cyan-200 bg-cyan-50 text-cyan-900",
+    synced: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    error: "border-rose-200 bg-rose-50 text-rose-900",
+  }[status];
+
+  return (
+    <div className={`rounded-md border px-3 py-2 text-sm leading-6 ${toneClass}`}>
+      <strong className="font-semibold">
+        {configured ? "Status da nuvem: " : "Nuvem nao configurada: "}
+      </strong>
+      {configured
+        ? message
+        : "adicione NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel para salvar em todos os dispositivos."}
+    </div>
   );
 }
 
