@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NegociosX",
-  description: "Calculadora profissional para analise de negocios imobiliarios",
+  title: "Aureon Business Desk | Lucas Moura",
+  description: "Painel do Grupo Aureon para analise de negocios imobiliarios",
 };
 
 export default function RootLayout({

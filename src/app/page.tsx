@@ -10,12 +10,16 @@ type Scenario = {
   type: BusinessType;
   city: string;
   acquisitionCost: number;
+  acquisitionFees: number;
   setupCost: number;
+  workingCapital: number;
   monthlyFixedCost: number;
+  monthlyDebtService: number;
   variableCostRate: number;
   averageTicket: number;
   monthlyDemand: number;
   occupancyRate: number;
+  expectedAppreciationRate: number;
   notes: string;
   createdAt: string;
 };
@@ -25,22 +29,29 @@ type ScenarioForm = {
   type: BusinessType;
   city: string;
   acquisitionCost: string;
+  acquisitionFees: string;
   setupCost: string;
+  workingCapital: string;
   monthlyFixedCost: string;
+  monthlyDebtService: string;
   variableCostRate: string;
   averageTicket: string;
   monthlyDemand: string;
   occupancyRate: string;
+  expectedAppreciationRate: string;
   notes: string;
 };
 
 type ScenarioMetrics = {
   grossRevenue: number;
   variableCost: number;
+  operatingProfit: number;
   netProfit: number;
   totalInvestment: number;
   annualProfit: number;
+  projectedAnnualGain: number;
   capRate: number;
+  investorReturn: number;
   paybackMonths: number | null;
   margin: number;
   breakEvenDemand: number;
@@ -48,7 +59,8 @@ type ScenarioMetrics = {
   risk: "Baixo" | "Moderado" | "Alto";
 };
 
-const storageKey = "negociosx:scenarios";
+const storageKey = "aureon:business-scenarios";
+const legacyStorageKey = "negociosx:scenarios";
 
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -68,38 +80,50 @@ const businessLabels: Record<BusinessType, string> = {
 };
 
 const businessHints: Record<BusinessType, string> = {
-  airbnb: "Diaria media, ocupacao e custos de limpeza/condominio.",
-  events: "Ticket por festa, agenda mensal e equipe operacional.",
-  auction: "Desagio, reforma, regularizacao e revenda/locacao.",
+  airbnb: "Analise diaria, ocupacao, taxas da plataforma, condominio, limpeza e capital para mobiliario.",
+  events: "Analise agenda mensal, ticket por evento, equipe, manutencao, licencas e sazonalidade.",
+  auction: "Analise desagio, ITBI/cartorio, regularizacao, reforma, risco juridico e potencial de valorizacao.",
 };
 
 const defaultsByType: Record<BusinessType, Omit<ScenarioForm, "type" | "name" | "city" | "notes">> = {
   airbnb: {
     acquisitionCost: "280000",
+    acquisitionFees: "18000",
     setupCost: "45000",
+    workingCapital: "18000",
     monthlyFixedCost: "2800",
+    monthlyDebtService: "0",
     variableCostRate: "18",
     averageTicket: "320",
     monthlyDemand: "24",
     occupancyRate: "72",
+    expectedAppreciationRate: "6",
   },
   events: {
     acquisitionCost: "420000",
+    acquisitionFees: "26000",
     setupCost: "85000",
+    workingCapital: "35000",
     monthlyFixedCost: "9500",
+    monthlyDebtService: "0",
     variableCostRate: "28",
     averageTicket: "6500",
     monthlyDemand: "6",
     occupancyRate: "65",
+    expectedAppreciationRate: "5",
   },
   auction: {
     acquisitionCost: "210000",
+    acquisitionFees: "23000",
     setupCost: "70000",
+    workingCapital: "30000",
     monthlyFixedCost: "1800",
+    monthlyDebtService: "0",
     variableCostRate: "12",
     averageTicket: "2800",
     monthlyDemand: "4",
     occupancyRate: "85",
+    expectedAppreciationRate: "12",
   },
 };
 
@@ -118,12 +142,16 @@ const seedScenarios: Scenario[] = [
     type: "airbnb",
     city: "Sao Paulo, SP",
     acquisitionCost: 280000,
+    acquisitionFees: 18000,
     setupCost: 45000,
+    workingCapital: 18000,
     monthlyFixedCost: 2800,
+    monthlyDebtService: 0,
     variableCostRate: 18,
     averageTicket: 320,
     monthlyDemand: 24,
     occupancyRate: 72,
+    expectedAppreciationRate: 6,
     notes: "Bom para testar diaria, ocupacao e custo de mobilia.",
     createdAt: new Date("2026-05-19T12:00:00").toISOString(),
   },
@@ -133,12 +161,16 @@ const seedScenarios: Scenario[] = [
     type: "events",
     city: "Campinas, SP",
     acquisitionCost: 420000,
+    acquisitionFees: 26000,
     setupCost: 85000,
+    workingCapital: 35000,
     monthlyFixedCost: 9500,
+    monthlyDebtService: 0,
     variableCostRate: 28,
     averageTicket: 6500,
     monthlyDemand: 6,
     occupancyRate: 65,
+    expectedAppreciationRate: 5,
     notes: "Depende de calendario, vizinhanca e licencas.",
     createdAt: new Date("2026-05-19T12:10:00").toISOString(),
   },
@@ -148,12 +180,16 @@ const seedScenarios: Scenario[] = [
     type: "auction",
     city: "Santos, SP",
     acquisitionCost: 210000,
+    acquisitionFees: 23000,
     setupCost: 70000,
+    workingCapital: 30000,
     monthlyFixedCost: 1800,
+    monthlyDebtService: 0,
     variableCostRate: 12,
     averageTicket: 2800,
     monthlyDemand: 4,
     occupancyRate: 85,
+    expectedAppreciationRate: 12,
     notes: "Considerar documentacao, desocupacao e reserva juridica.",
     createdAt: new Date("2026-05-19T12:20:00").toISOString(),
   },
@@ -177,26 +213,35 @@ function calculateMetrics(scenario: Scenario): ScenarioMetrics {
   const effectiveDemand = scenario.monthlyDemand * (clamp(scenario.occupancyRate, 0, 100) / 100);
   const grossRevenue = effectiveDemand * scenario.averageTicket;
   const variableCost = grossRevenue * (clamp(scenario.variableCostRate, 0, 100) / 100);
-  const netProfit = grossRevenue - variableCost - scenario.monthlyFixedCost;
-  const totalInvestment = scenario.acquisitionCost + scenario.setupCost;
+  const operatingProfit = grossRevenue - variableCost - scenario.monthlyFixedCost;
+  const netProfit = operatingProfit - scenario.monthlyDebtService;
+  const totalInvestment =
+    scenario.acquisitionCost + scenario.acquisitionFees + scenario.setupCost + scenario.workingCapital;
   const annualProfit = netProfit * 12;
+  const projectedAnnualGain =
+    annualProfit + totalInvestment * (clamp(scenario.expectedAppreciationRate, -100, 100) / 100);
   const capRate = totalInvestment > 0 ? annualProfit / totalInvestment : 0;
+  const investorReturn = totalInvestment > 0 ? projectedAnnualGain / totalInvestment : 0;
   const paybackMonths = netProfit > 0 && totalInvestment > 0 ? totalInvestment / netProfit : null;
   const margin = grossRevenue > 0 ? netProfit / grossRevenue : 0;
   const contribution = scenario.averageTicket * (1 - clamp(scenario.variableCostRate, 0, 100) / 100);
-  const breakEvenDemand = contribution > 0 ? scenario.monthlyFixedCost / contribution : 0;
+  const breakEvenDemand =
+    contribution > 0 ? (scenario.monthlyFixedCost + scenario.monthlyDebtService) / contribution : 0;
 
   const score = Math.round(
-    clamp(capRate * 260 + margin * 45 - (paybackMonths ?? 120) * 0.35 + 45, 0, 100),
+    clamp(investorReturn * 240 + margin * 40 - (paybackMonths ?? 120) * 0.3 + 45, 0, 100),
   );
 
   return {
     grossRevenue,
     variableCost,
+    operatingProfit,
     netProfit,
     totalInvestment,
     annualProfit,
+    projectedAnnualGain,
     capRate,
+    investorReturn,
     paybackMonths,
     margin,
     breakEvenDemand,
@@ -212,12 +257,16 @@ function scenarioFromForm(form: ScenarioForm): Scenario {
     type: form.type,
     city: form.city.trim(),
     acquisitionCost: toNumber(form.acquisitionCost),
+    acquisitionFees: toNumber(form.acquisitionFees),
     setupCost: toNumber(form.setupCost),
+    workingCapital: toNumber(form.workingCapital),
     monthlyFixedCost: toNumber(form.monthlyFixedCost),
+    monthlyDebtService: toNumber(form.monthlyDebtService),
     variableCostRate: clamp(toNumber(form.variableCostRate), 0, 100),
     averageTicket: toNumber(form.averageTicket),
     monthlyDemand: toNumber(form.monthlyDemand),
     occupancyRate: clamp(toNumber(form.occupancyRate), 0, 100),
+    expectedAppreciationRate: clamp(toNumber(form.expectedAppreciationRate), -100, 100),
     notes: form.notes.trim(),
     createdAt: new Date().toISOString(),
   };
@@ -229,24 +278,28 @@ function formFromScenario(scenario: Scenario): ScenarioForm {
     type: scenario.type,
     city: scenario.city,
     acquisitionCost: String(scenario.acquisitionCost),
+    acquisitionFees: String(scenario.acquisitionFees),
     setupCost: String(scenario.setupCost),
+    workingCapital: String(scenario.workingCapital),
     monthlyFixedCost: String(scenario.monthlyFixedCost),
+    monthlyDebtService: String(scenario.monthlyDebtService),
     variableCostRate: String(scenario.variableCostRate),
     averageTicket: String(scenario.averageTicket),
     monthlyDemand: String(scenario.monthlyDemand),
     occupancyRate: String(scenario.occupancyRate),
+    expectedAppreciationRate: String(scenario.expectedAppreciationRate),
     notes: scenario.notes,
   };
 }
 
-function isScenario(value: unknown): value is Scenario {
+function normalizeStoredScenario(value: unknown): Scenario | null {
   if (!value || typeof value !== "object") {
-    return false;
+    return null;
   }
 
   const scenario = value as Record<string, unknown>;
 
-  return (
+  const hasRequiredFields =
     typeof scenario.id === "string" &&
     typeof scenario.name === "string" &&
     (scenario.type === "airbnb" || scenario.type === "events" || scenario.type === "auction") &&
@@ -259,8 +312,32 @@ function isScenario(value: unknown): value is Scenario {
     typeof scenario.monthlyDemand === "number" &&
     typeof scenario.occupancyRate === "number" &&
     typeof scenario.notes === "string" &&
-    typeof scenario.createdAt === "string"
-  );
+    typeof scenario.createdAt === "string";
+
+  if (!hasRequiredFields) {
+    return null;
+  }
+
+  return {
+    id: scenario.id as string,
+    name: scenario.name as string,
+    type: scenario.type as BusinessType,
+    city: scenario.city as string,
+    acquisitionCost: scenario.acquisitionCost as number,
+    acquisitionFees: typeof scenario.acquisitionFees === "number" ? scenario.acquisitionFees : 0,
+    setupCost: scenario.setupCost as number,
+    workingCapital: typeof scenario.workingCapital === "number" ? scenario.workingCapital : 0,
+    monthlyFixedCost: scenario.monthlyFixedCost as number,
+    monthlyDebtService: typeof scenario.monthlyDebtService === "number" ? scenario.monthlyDebtService : 0,
+    variableCostRate: scenario.variableCostRate as number,
+    averageTicket: scenario.averageTicket as number,
+    monthlyDemand: scenario.monthlyDemand as number,
+    occupancyRate: scenario.occupancyRate as number,
+    expectedAppreciationRate:
+      typeof scenario.expectedAppreciationRate === "number" ? scenario.expectedAppreciationRate : 0,
+    notes: scenario.notes as string,
+    createdAt: scenario.createdAt as string,
+  };
 }
 
 function parseScenariosSnapshot(snapshot: string | null) {
@@ -275,7 +352,9 @@ function parseScenariosSnapshot(snapshot: string | null) {
       return seedScenarios;
     }
 
-    return parsed.filter(isScenario);
+    return parsed
+      .map(normalizeStoredScenario)
+      .filter((scenario): scenario is Scenario => Boolean(scenario));
   } catch {
     return seedScenarios;
   }
@@ -287,7 +366,7 @@ function readStoredScenarios() {
   }
 
   try {
-    return parseScenariosSnapshot(localStorage.getItem(storageKey));
+    return parseScenariosSnapshot(localStorage.getItem(storageKey) ?? localStorage.getItem(legacyStorageKey));
   } catch {
     return seedScenarios;
   }
@@ -392,12 +471,18 @@ export default function Home() {
       name: String(data.get("name") ?? form.name),
       city: String(data.get("city") ?? form.city),
       acquisitionCost: String(data.get("acquisitionCost") ?? form.acquisitionCost),
+      acquisitionFees: String(data.get("acquisitionFees") ?? form.acquisitionFees),
       setupCost: String(data.get("setupCost") ?? form.setupCost),
+      workingCapital: String(data.get("workingCapital") ?? form.workingCapital),
       monthlyFixedCost: String(data.get("monthlyFixedCost") ?? form.monthlyFixedCost),
+      monthlyDebtService: String(data.get("monthlyDebtService") ?? form.monthlyDebtService),
       variableCostRate: String(data.get("variableCostRate") ?? form.variableCostRate),
       averageTicket: String(data.get("averageTicket") ?? form.averageTicket),
       monthlyDemand: String(data.get("monthlyDemand") ?? form.monthlyDemand),
       occupancyRate: String(data.get("occupancyRate") ?? form.occupancyRate),
+      expectedAppreciationRate: String(
+        data.get("expectedAppreciationRate") ?? form.expectedAppreciationRate,
+      ),
       notes: String(data.get("notes") ?? form.notes),
     };
 
@@ -454,7 +539,7 @@ export default function Home() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `negociosx-cenarios-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `aureon-cenarios-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -478,26 +563,26 @@ export default function Home() {
           <div className="flex flex-col justify-between gap-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-normal text-cyan-700">
-                NegociosX
+                Grupo Aureon | Lucas Moura
               </p>
               <h1 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
-                Calculadora profissional para studios, eventos e imoveis de leilao.
+                Aureon Business Desk
               </h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                Compare oportunidades com indicadores claros: investimento, receita, lucro,
-                cap rate, payback e risco operacional.
+                Painel executivo para estudar aquisicoes, operacoes e retornos de negocios
+                imobiliarios antes de colocar capital em risco.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <MetricTile label="Investimento" value={currency.format(portfolio.totalInvestment)} />
-              <MetricTile label="Lucro mensal" value={currency.format(portfolio.monthlyProfit)} />
-              <MetricTile label="Cap rate medio" value={percent.format(portfolio.capRate)} />
+              <MetricTile label="Capital analisado" value={currency.format(portfolio.totalInvestment)} />
+              <MetricTile label="Caixa livre mensal" value={currency.format(portfolio.monthlyProfit)} />
+              <MetricTile label="Retorno operacional" value={percent.format(portfolio.capRate)} />
             </div>
           </div>
 
           <section className="rounded-lg bg-slate-950 p-5 text-white">
-            <p className="text-sm text-slate-300">Melhor oportunidade agora</p>
+            <p className="text-sm text-slate-300">Parecer preliminar Aureon</p>
             {portfolio.best ? (
               <>
                 <h2 className="mt-3 text-2xl font-semibold">{portfolio.best.scenario.name}</h2>
@@ -507,7 +592,7 @@ export default function Home() {
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <DarkTile label="Score" value={`${portfolio.best.metrics.score}/100`} />
                   <DarkTile label="Risco" value={portfolio.best.metrics.risk} />
-                  <DarkTile label="Lucro" value={currency.format(portfolio.best.metrics.netProfit)} />
+                  <DarkTile label="Caixa livre" value={currency.format(portfolio.best.metrics.netProfit)} />
                   <DarkTile
                     label="Payback"
                     value={
@@ -521,14 +606,18 @@ export default function Home() {
                     value={percent.format(portfolio.best.metrics.margin)}
                   />
                   <DarkTile
-                    label="Ponto minimo"
+                    label="Equilibrio"
                     value={`${portfolio.best.metrics.breakEvenDemand.toFixed(1)} vendas`}
+                  />
+                  <DarkTile
+                    label="Retorno total"
+                    value={percent.format(portfolio.best.metrics.investorReturn)}
                   />
                 </div>
               </>
             ) : (
               <p className="mt-3 text-sm text-slate-300">
-                Cadastre uma oportunidade para iniciar a analise.
+                Cadastre uma oportunidade para iniciar a analise do Grupo Aureon.
               </p>
             )}
           </section>
@@ -538,10 +627,10 @@ export default function Home() {
           <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <div className="mb-5">
               <h2 className="text-xl font-semibold">
-                {editingId ? "Editar oportunidade" : "Nova oportunidade"}
+                {editingId ? "Editar estudo" : "Novo estudo de investimento"}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Os indicadores atualizam em tempo real conforme voce altera as premissas.
+                Informe premissas contabeis, operacionais e financeiras para gerar um parecer rapido.
               </p>
             </div>
 
@@ -566,10 +655,10 @@ export default function Home() {
               </p>
 
               <TextInput
-                label="Nome do ativo"
+                label="Nome do projeto ou ativo"
                 name="name"
                 onChange={(value) => updateForm("name", value)}
-                placeholder="Ex: Studio Vila Mariana"
+                placeholder="Ex: Studio Vila Mariana, Espaco Aureon Eventos"
                 required
                 value={form.name}
               />
@@ -586,31 +675,58 @@ export default function Home() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextInput
                   inputMode="decimal"
-                  label="Compra"
+                  label="Preco de compra"
                   name="acquisitionCost"
                   onChange={(value) => updateForm("acquisitionCost", value)}
                   value={form.acquisitionCost}
                 />
                 <TextInput
                   inputMode="decimal"
-                  label="Reforma/setup"
-                  name="setupCost"
-                  onChange={(value) => updateForm("setupCost", value)}
-                  value={form.setupCost}
+                  label="ITBI, cartorio e taxas"
+                  name="acquisitionFees"
+                  onChange={(value) => updateForm("acquisitionFees", value)}
+                  value={form.acquisitionFees}
                 />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextInput
                   inputMode="decimal"
-                  label="Custo fixo mensal"
+                  label="Reforma, mobilia e setup"
+                  name="setupCost"
+                  onChange={(value) => updateForm("setupCost", value)}
+                  value={form.setupCost}
+                />
+                <TextInput
+                  inputMode="decimal"
+                  label="Capital de giro/reserva"
+                  name="workingCapital"
+                  onChange={(value) => updateForm("workingCapital", value)}
+                  value={form.workingCapital}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextInput
+                  inputMode="decimal"
+                  label="Custos fixos mensais"
                   name="monthlyFixedCost"
                   onChange={(value) => updateForm("monthlyFixedCost", value)}
                   value={form.monthlyFixedCost}
                 />
                 <TextInput
                   inputMode="decimal"
-                  label="Custo variavel %"
+                  label="Parcela/financiamento mensal"
+                  name="monthlyDebtService"
+                  onChange={(value) => updateForm("monthlyDebtService", value)}
+                  value={form.monthlyDebtService}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextInput
+                  inputMode="decimal"
+                  label="Impostos, taxas e comissoes %"
                   max="100"
                   min="0"
                   name="variableCostRate"
@@ -618,19 +734,29 @@ export default function Home() {
                   type="number"
                   value={form.variableCostRate}
                 />
+                <TextInput
+                  inputMode="decimal"
+                  label="Valorizacao anual esperada %"
+                  max="100"
+                  min="-100"
+                  name="expectedAppreciationRate"
+                  onChange={(value) => updateForm("expectedAppreciationRate", value)}
+                  type="number"
+                  value={form.expectedAppreciationRate}
+                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextInput
                   inputMode="decimal"
-                  label={form.type === "airbnb" ? "Diaria media" : "Ticket medio"}
+                  label={form.type === "airbnb" ? "Diaria media" : "Receita media por venda"}
                   name="averageTicket"
                   onChange={(value) => updateForm("averageTicket", value)}
                   value={form.averageTicket}
                 />
                 <TextInput
                   inputMode="decimal"
-                  label={form.type === "airbnb" ? "Diarias possiveis" : "Vendas por mes"}
+                  label={form.type === "airbnb" ? "Diarias disponiveis no mes" : "Vendas/eventos por mes"}
                   name="monthlyDemand"
                   onChange={(value) => updateForm("monthlyDemand", value)}
                   value={form.monthlyDemand}
@@ -639,7 +765,7 @@ export default function Home() {
 
               <TextInput
                 inputMode="decimal"
-                label="Ocupacao/conversao %"
+                label="Ocupacao, agenda ou conversao %"
                 max="100"
                 min="0"
                 name="occupancyRate"
@@ -654,16 +780,16 @@ export default function Home() {
                   className="min-h-24 rounded-md border border-slate-200 px-3 py-3 text-slate-950 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
                   name="notes"
                   onChange={(event) => updateForm("notes", event.target.value)}
-                  placeholder="Riscos, licencas, reforma, documentos, concorrencia..."
+                  placeholder="Riscos juridicos, licencas, impostos, reforma, concorrencia, liquidez, documentacao..."
                   value={form.notes}
                 />
               </label>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <PreviewMetric label="Receita" value={currency.format(previewMetrics.grossRevenue)} />
-                  <PreviewMetric label="Lucro" value={currency.format(previewMetrics.netProfit)} />
-                  <PreviewMetric label="Cap rate" value={percent.format(previewMetrics.capRate)} />
+                  <PreviewMetric label="Receita bruta" value={currency.format(previewMetrics.grossRevenue)} />
+                  <PreviewMetric label="Caixa livre" value={currency.format(previewMetrics.netProfit)} />
+                  <PreviewMetric label="Retorno total" value={percent.format(previewMetrics.investorReturn)} />
                   <PreviewMetric
                     label="Payback"
                     value={
@@ -681,7 +807,7 @@ export default function Home() {
                   onClick={(event) => event.currentTarget.form?.requestSubmit()}
                   type="button"
                 >
-                  {editingId ? "Salvar alteracoes" : "Salvar oportunidade"}
+                  {editingId ? "Salvar parecer" : "Salvar estudo"}
                 </button>
                 {editingId ? (
                   <button
@@ -700,9 +826,9 @@ export default function Home() {
             <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">Ranking de oportunidades</h2>
+                  <h2 className="text-xl font-semibold">Comite de oportunidades Aureon</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Ordenado pelo score de retorno, margem e payback.
+                    Ordenado por retorno total, margem, payback e risco operacional.
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -789,15 +915,16 @@ export default function Home() {
                         ) : null}
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-4 md:w-[520px]">
+                      <div className="grid gap-3 sm:grid-cols-5 md:w-[640px]">
                         <ResultMetric label="Score" value={`${metrics.score}/100`} />
-                        <ResultMetric label="Lucro" value={currency.format(metrics.netProfit)} />
-                        <ResultMetric label="Cap rate" value={percent.format(metrics.capRate)} />
+                        <ResultMetric label="Caixa livre" value={currency.format(metrics.netProfit)} />
+                        <ResultMetric label="Retorno op." value={percent.format(metrics.capRate)} />
                         <ResultMetric
                           label="Payback"
                           value={metrics.paybackMonths ? `${metrics.paybackMonths.toFixed(1)}m` : "Inviavel"}
                         />
                         <ResultMetric label="Margem" value={percent.format(metrics.margin)} />
+                        <ResultMetric label="Retorno total" value={percent.format(metrics.investorReturn)} />
                       </div>
 
                       <div className="flex flex-wrap gap-2 md:col-start-2 md:col-end-4 md:justify-end">
@@ -827,7 +954,7 @@ export default function Home() {
                   ))
                 ) : (
                   <div className="rounded-lg bg-slate-50 p-8 text-center text-sm text-slate-500">
-                    Nenhuma oportunidade encontrada para este filtro.
+                    Nenhum estudo encontrado para este filtro.
                   </div>
                 )}
               </div>
@@ -835,18 +962,18 @@ export default function Home() {
 
             <div className="grid gap-5 xl:grid-cols-3">
               <InsightCard
-                label="Receita mensal projetada"
-                text="Soma da demanda efetiva multiplicada pelo ticket medio de cada oportunidade."
+                label="Receita bruta mensal"
+                text="Demanda efetiva multiplicada pela receita media de cada venda, diaria ou evento."
                 value={currency.format(portfolio.grossRevenue)}
               />
               <InsightCard
-                label="Lucro anual projetado"
-                text="Receita menos custos variaveis e custos fixos, anualizada para comparacao."
+                label="Caixa livre anual"
+                text="Receita menos impostos, taxas, custos fixos e parcelas, anualizada para decisao."
                 value={currency.format(portfolio.annualProfit)}
               />
               <InsightCard
                 label="Ponto de equilibrio"
-                text="Menor demanda media necessaria para cobrir os custos fixos dos cenarios cadastrados."
+                text="Demanda media necessaria para cobrir custos fixos e servico da divida."
                 value={
                   scenarios.length > 0
                     ? `${(

@@ -1,12 +1,13 @@
-# NegociosX
+# Aureon Business Desk
 
-Calculadora profissional para analisar oportunidades em studios para Airbnb, locais de eventos e imoveis de leilao.
+Painel do Grupo Aureon, de Lucas Moura, para analisar oportunidades em studios para Airbnb, locais de eventos e imoveis de leilao.
 
 ## O que o sistema faz
 
-- Cadastra oportunidades de negocio.
+- Cadastra estudos de investimento.
 - Compara modelos de Airbnb, eventos e leilao.
-- Calcula receita mensal, lucro, margem, cap rate, payback e score.
+- Calcula receita, caixa livre, margem, retorno operacional, retorno total, payback e score.
+- Considera preco de compra, taxas de aquisicao, reforma/setup, capital de giro, custos fixos, parcelas, impostos/comissoes e valorizacao esperada.
 - Permite editar, duplicar, filtrar e remover cenarios.
 - Salva os dados no navegador para uso imediato no prototipo.
 - Funciona sem backend, sem credenciais e sem dependencia externa.
