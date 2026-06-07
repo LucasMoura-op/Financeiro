@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Financeiro",
-  description: "Gerenciador financeiro pessoal",
+  title: "NegociosX",
+  description: "Calculadora profissional para analise de negocios imobiliarios",
 };
 
 export default function RootLayout({

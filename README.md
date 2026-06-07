@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NegociosX
 
-## Getting Started
+Calculadora profissional para analisar oportunidades em studios para Airbnb, locais de eventos e imoveis de leilao.
 
-First, run the development server:
+## O que o sistema faz
+
+- Cadastra oportunidades de negocio.
+- Compara modelos de Airbnb, eventos e leilao.
+- Calcula receita mensal, lucro, margem, cap rate, payback e score.
+- Permite editar, duplicar, filtrar e remover cenarios.
+- Salva os dados no navegador para uso imediato no prototipo.
+- Funciona sem backend, sem credenciais e sem dependencia externa.
+
+## Stack
+
+- Next.js App Router
+- React
+- TypeScript
+- Tailwind CSS
+- Vercel
+
+## Instalar
+
+```bash
+npm install
+```
+
+## Desenvolvimento local
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validacao
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```
 
-## Learn More
+## Deploy na Vercel
 
-To learn more about Next.js, take a look at the following resources:
+Use as configuracoes padrao da Vercel para Next.js:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: deixe vazio
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+O projeto nao usa `output: "export"`, `basePath` ou `assetPrefix`, porque isso e desnecessario na Vercel e pode quebrar assets/rotas quando o app evoluir.
 
-## Deploy on Vercel
+## Supabase
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+O prototipo atual nao depende de Supabase. Quando a plataforma precisar de usuarios, times e dados sincronizados, crie as variaveis abaixo na Vercel e no `.env.local`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Importante: `SUPABASE_SERVICE_ROLE_KEY` nunca deve ser usada em componentes client-side. Ela deve ficar apenas em rotas server-side, actions ou jobs protegidos.
+
+Tabelas recomendadas para a proxima etapa:
+
+- `profiles`
+- `organizations`
+- `organization_members`
+- `business_scenarios`
+- `scenario_assumptions`
+- `scenario_versions`
+
+Ative RLS em todas as tabelas e permita acesso apenas aos membros da organizacao dona do registro.
