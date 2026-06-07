@@ -559,8 +559,8 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f7fb] text-slate-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 sm:px-6 lg:px-8">
-        <header className="grid gap-5 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 md:grid-cols-[1.1fr_0.9fr] md:p-6">
-          <div className="flex flex-col justify-between gap-5">
+        <header className="grid gap-5 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 xl:grid-cols-[1.1fr_0.9fr] xl:p-6">
+          <div className="flex min-w-0 flex-col justify-between gap-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-normal text-cyan-700">
                 Grupo Aureon | Lucas Moura
@@ -577,7 +577,7 @@ export default function Home() {
             <div className="grid gap-3 sm:grid-cols-3">
               <MetricTile label="Capital analisado" value={currency.format(portfolio.totalInvestment)} />
               <MetricTile label="Caixa livre mensal" value={currency.format(portfolio.monthlyProfit)} />
-              <MetricTile label="Retorno operacional" value={percent.format(portfolio.capRate)} />
+              <MetricTile label="Retorno op." value={percent.format(portfolio.capRate)} />
             </div>
           </div>
 
@@ -589,7 +589,7 @@ export default function Home() {
                 <p className="mt-1 text-sm text-slate-300">
                   {businessLabels[portfolio.best.scenario.type]} em {portfolio.best.scenario.city}
                 </p>
-                <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <DarkTile label="Score" value={`${portfolio.best.metrics.score}/100`} />
                   <DarkTile label="Risco" value={portfolio.best.metrics.risk} />
                   <DarkTile label="Caixa livre" value={currency.format(portfolio.best.metrics.netProfit)} />
@@ -610,7 +610,7 @@ export default function Home() {
                     value={`${portfolio.best.metrics.breakEvenDemand.toFixed(1)} vendas`}
                   />
                   <DarkTile
-                    label="Retorno total"
+                    label="Ret. total"
                     value={percent.format(portfolio.best.metrics.investorReturn)}
                   />
                 </div>
@@ -623,7 +623,7 @@ export default function Home() {
           </section>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-[400px_1fr]">
+        <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
           <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <div className="mb-5">
               <h2 className="text-xl font-semibold">
@@ -789,7 +789,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-3">
                   <PreviewMetric label="Receita bruta" value={currency.format(previewMetrics.grossRevenue)} />
                   <PreviewMetric label="Caixa livre" value={currency.format(previewMetrics.netProfit)} />
-                  <PreviewMetric label="Retorno total" value={percent.format(previewMetrics.investorReturn)} />
+                  <PreviewMetric label="Ret. total" value={percent.format(previewMetrics.investorReturn)} />
                   <PreviewMetric
                     label="Payback"
                     value={
@@ -824,15 +824,15 @@ export default function Home() {
 
           <section className="grid gap-5">
             <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Comite de oportunidades Aureon</h2>
                   <p className="mt-1 text-sm text-slate-500">
                     Ordenado por retorno total, margem, payback e risco operacional.
                   </p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <div className="grid grid-cols-4 rounded-md bg-slate-100 p-1 text-sm">
+                <div className="grid w-full gap-3 xl:max-w-3xl xl:grid-cols-[1fr_auto]">
+                  <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1 text-sm sm:grid-cols-4">
                     {(["all", "airbnb", "events", "auction"] as const).map((type) => (
                       <button
                         className={`h-9 rounded-md px-2 font-semibold transition ${
@@ -884,7 +884,7 @@ export default function Home() {
                 {rankedScenarios.length > 0 ? (
                   rankedScenarios.map(({ scenario, metrics }, index) => (
                     <article
-                      className="grid gap-4 rounded-lg border border-slate-200 p-4 md:grid-cols-[52px_1fr_auto] md:items-center"
+                      className="grid gap-4 rounded-lg border border-slate-200 p-4 lg:grid-cols-[52px_minmax(0,1fr)] xl:grid-cols-[52px_minmax(0,1fr)_minmax(300px,440px)] xl:items-center"
                       key={scenario.id}
                     >
                       <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-700">
@@ -915,7 +915,7 @@ export default function Home() {
                         ) : null}
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-5 md:w-[640px]">
+                      <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:col-start-2 xl:col-start-auto xl:grid-cols-2">
                         <ResultMetric label="Score" value={`${metrics.score}/100`} />
                         <ResultMetric label="Caixa livre" value={currency.format(metrics.netProfit)} />
                         <ResultMetric label="Retorno op." value={percent.format(metrics.capRate)} />
@@ -924,7 +924,7 @@ export default function Home() {
                           value={metrics.paybackMonths ? `${metrics.paybackMonths.toFixed(1)}m` : "Inviavel"}
                         />
                         <ResultMetric label="Margem" value={percent.format(metrics.margin)} />
-                        <ResultMetric label="Retorno total" value={percent.format(metrics.investorReturn)} />
+                        <ResultMetric label="Ret. total" value={percent.format(metrics.investorReturn)} />
                       </div>
 
                       <div className="flex flex-wrap gap-2 md:col-start-2 md:col-end-4 md:justify-end">
@@ -1037,45 +1037,55 @@ function TextInput({
 
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <p className="text-sm text-slate-500">{label}</p>
-      <strong className="mt-2 block text-xl font-semibold text-slate-950">{value}</strong>
+      <strong className="mt-2 block break-words text-lg font-semibold leading-tight text-slate-950 sm:text-xl">
+        {value}
+      </strong>
     </div>
   );
 }
 
 function DarkTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-white/10 p-3">
+    <div className="min-w-0 rounded-md bg-white/10 p-3">
       <p className="text-xs text-slate-300">{label}</p>
-      <strong className="mt-1 block text-base font-semibold text-white">{value}</strong>
+      <strong className="mt-1 block break-words text-sm font-semibold leading-tight text-white sm:text-base">
+        {value}
+      </strong>
     </div>
   );
 }
 
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <strong className="mt-1 block text-base font-semibold text-slate-950">{value}</strong>
+      <strong className="mt-1 block break-words text-sm font-semibold leading-tight text-slate-950 sm:text-base">
+        {value}
+      </strong>
     </div>
   );
 }
 
 function ResultMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-50 p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <strong className="mt-1 block text-sm font-semibold text-slate-950">{value}</strong>
+    <div className="min-w-0 rounded-md bg-slate-50 p-3">
+      <p className="text-xs leading-tight text-slate-500">{label}</p>
+      <strong className="mt-1 block break-words text-sm font-semibold leading-tight text-slate-950">
+        {value}
+      </strong>
     </div>
   );
 }
 
 function InsightCard({ label, text, value }: { label: string; text: string; value: string }) {
   return (
-    <article className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <article className="min-w-0 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <p className="text-sm font-semibold text-cyan-700">{label}</p>
-      <strong className="mt-3 block text-2xl font-semibold text-slate-950">{value}</strong>
+      <strong className="mt-3 block break-words text-xl font-semibold leading-tight text-slate-950 sm:text-2xl">
+        {value}
+      </strong>
       <p className="mt-3 text-sm leading-6 text-slate-500">{text}</p>
     </article>
   );
